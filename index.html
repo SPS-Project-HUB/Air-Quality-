@@ -4,42 +4,352 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>ESP32 Air Quality Monitor — Live</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body { font-family: system-ui; background:#f7f8fb; color:#111; padding:24px; margin:0; }
-    .card { background:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.05); padding:24px; max-width:720px; margin:auto; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:14px; }
-    .box { background:#f9fafc; padding:16px; border-radius:10px; text-align:center; }
-    .big { font-size:1.6rem; font-weight:600; }
-    #log { max-height:200px; overflow:auto; background:#f0f0f0; margin-top:14px; padding:8px; border-radius:8px; font-size:0.9rem; }
-    footer { text-align:center; color:#777; font-size:0.85rem; margin-top:18px; }
+    :root {
+      --primary: #4361ee;
+      --secondary: #3f37c9;
+      --success: #4cc9f0;
+      --warning: #f72585;
+      --danger: #e63946;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --gray: #6c757d;
+      --bg: #f7f8fb;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      line-height: 1.6;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      padding: 30px;
+      margin-bottom: 24px;
+      transition: transform 0.3s ease;
+    }
+    
+    .card:hover {
+      transform: translateY(-5px);
+    }
+    
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    
+    h1 {
+      color: var(--primary);
+      font-size: 1.8rem;
+      font-weight: 700;
+    }
+    
+    .status {
+      padding: 10px 16px;
+      background: #e9ecef;
+      border-radius: 50px;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .status.connected {
+      background: #d1e7dd;
+      color: #0f5132;
+    }
+    
+    .status.connecting {
+      background: #fff3cd;
+      color: #856404;
+    }
+    
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin: 24px 0;
+    }
+    
+    .metric-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      border-left: 4px solid var(--primary);
+      transition: all 0.3s ease;
+    }
+    
+    .metric-box:hover {
+      box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+    }
+    
+    .metric-box.temp {
+      border-left-color: #e63946;
+    }
+    
+    .metric-box.humidity {
+      border-left-color: #4cc9f0;
+    }
+    
+    .metric-box.mq2 {
+      border-left-color: #7209b7;
+    }
+    
+    .metric-box.oxygen {
+      border-left-color: #06d6a0;
+    }
+    
+    .metric-box.co2 {
+      border-left-color: #ff9e00;
+    }
+    
+    .metric-label {
+      font-size: 0.9rem;
+      color: var(--gray);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .metric-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin: 8px 0;
+    }
+    
+    .metric-unit {
+      font-size: 1rem;
+      color: var(--gray);
+      font-weight: 500;
+    }
+    
+    .metric-status {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: #e9ecef;
+      display: inline-block;
+      margin-top: 6px;
+    }
+    
+    .metric-status.good {
+      background: #d1e7dd;
+      color: #0f5132;
+    }
+    
+    .metric-status.moderate {
+      background: #fff3cd;
+      color: #856404;
+    }
+    
+    .metric-status.poor {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    
+    .log-container {
+      margin-top: 30px;
+    }
+    
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    
+    .log-header h2 {
+      font-size: 1.3rem;
+      color: var(--primary);
+    }
+    
+    #log {
+      max-height: 250px;
+      overflow: auto;
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 0.9rem;
+      border: 1px solid #e9ecef;
+    }
+    
+    #events {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .log-entry {
+      padding: 8px 12px;
+      background: white;
+      border-radius: 8px;
+      border-left: 3px solid var(--primary);
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+    }
+    
+    footer {
+      text-align: center;
+      color: var(--gray);
+      font-size: 0.85rem;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #dee2e6;
+    }
+    
+    footer code {
+      background: #e9ecef;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+    }
+    
+    .last-update {
+      font-size: 0.8rem;
+      color: var(--gray);
+      margin-top: 8px;
+    }
+    
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+      }
+      
+      .card {
+        padding: 20px;
+      }
+      
+      h1 {
+        font-size: 1.5rem;
+      }
+      
+      .metric-value {
+        font-size: 1.5rem;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      body {
+        padding: 10px;
+      }
+      
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      
+      .metric-value {
+        font-size: 1.3rem;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>ESP32 Air Quality Monitor (Live)</h1>
-    <div id="status">Connecting to Firebase…</div>
+  <div class="container">
+    <div class="card">
+      <header>
+        <h1><i class="fas fa-wind"></i> ESP32 Air Quality Monitor</h1>
+        <div id="status" class="status connecting">
+          <i class="fas fa-sync-alt fa-spin"></i> Connecting to Firebase…
+        </div>
+      </header>
 
-    <div class="grid">
-      <div class="box">
-        <div>Temperature</div>
-        <div id="temp" class="big">— °C</div>
+      <div class="grid">
+        <div class="metric-box temp">
+          <div class="metric-label">
+            <i class="fas fa-thermometer-half"></i> Temperature
+          </div>
+          <div class="metric-value" id="temp">—</div>
+          <div class="metric-unit">°C</div>
+          <div class="metric-status" id="temp-status">—</div>
+        </div>
+        
+        <div class="metric-box humidity">
+          <div class="metric-label">
+            <i class="fas fa-tint"></i> Humidity
+          </div>
+          <div class="metric-value" id="hum">—</div>
+          <div class="metric-unit">%</div>
+          <div class="metric-status" id="hum-status">—</div>
+        </div>
+        
+        <div class="metric-box mq2">
+          <div class="metric-label">
+            <i class="fas fa-smog"></i> MQ-2 (Raw ADC)
+          </div>
+          <div class="metric-value" id="mq2">—</div>
+          <div class="metric-unit">ppm</div>
+          <div class="metric-status" id="mq2-status">—</div>
+        </div>
+        
+        <div class="metric-box oxygen">
+          <div class="metric-label">
+            <i class="fas fa-lungs"></i> Oxygen Level
+          </div>
+          <div class="metric-value" id="oxygen">—</div>
+          <div class="metric-unit">%</div>
+          <div class="metric-status" id="oxygen-status">—</div>
+        </div>
+        
+        <div class="metric-box co2">
+          <div class="metric-label">
+            <i class="fas fa-cloud"></i> CO₂ Level
+          </div>
+          <div class="metric-value" id="co2">—</div>
+          <div class="metric-unit">ppm</div>
+          <div class="metric-status" id="co2-status">—</div>
+        </div>
       </div>
-      <div class="box">
-        <div>Humidity</div>
-        <div id="hum" class="big">— %</div>
-      </div>
-      <div class="box">
-        <div>MQ-2 (Raw ADC)</div>
-        <div id="mq2" class="big">—</div>
+      
+      <div class="last-update">
+        <i class="far fa-clock"></i> Last update: <span id="last-update-time">—</span>
       </div>
     </div>
 
-    <div id="log">
-      <strong>Realtime updates:</strong>
-      <div id="events"></div>
+    <div class="card log-container">
+      <div class="log-header">
+        <h2><i class="fas fa-history"></i> Real-time Updates</h2>
+        <button id="clear-log" class="btn-small">Clear Log</button>
+      </div>
+      <div id="log">
+        <div id="events">
+          <div class="log-entry">System initialized. Waiting for data...</div>
+        </div>
+      </div>
     </div>
 
-    <footer>Data from your Firebase Realtime DB path: <code>/AirQualityData</code></footer>
+    <footer>
+      Data from your Firebase Realtime DB path: <code>/AirQualityData</code>
+    </footer>
   </div>
 
   <script type="module">
@@ -60,36 +370,165 @@
     const db = getDatabase(app);
     const refPath = ref(db, "/AirQualityData");
 
+    // DOM elements
     const tempEl = document.getElementById("temp");
     const humEl = document.getElementById("hum");
     const mq2El = document.getElementById("mq2");
+    const oxygenEl = document.getElementById("oxygen");
+    const co2El = document.getElementById("co2");
     const statusEl = document.getElementById("status");
     const eventsEl = document.getElementById("events");
+    const lastUpdateEl = document.getElementById("last-update-time");
+    const clearLogBtn = document.getElementById("clear-log");
+    
+    // Status elements
+    const tempStatusEl = document.getElementById("temp-status");
+    const humStatusEl = document.getElementById("hum-status");
+    const mq2StatusEl = document.getElementById("mq2-status");
+    const oxygenStatusEl = document.getElementById("oxygen-status");
+    const co2StatusEl = document.getElementById("co2-status");
+
+    // Clear log button
+    clearLogBtn.addEventListener('click', () => {
+      eventsEl.innerHTML = '<div class="log-entry">Log cleared</div>';
+    });
 
     function time() {
       return new Date().toLocaleString();
+    }
+    
+    function formatTime() {
+      return new Date().toLocaleTimeString();
+    }
+    
+    // Calculate oxygen and CO2 levels based on MQ-2 value
+    function calculateAirQuality(mq2Value) {
+      // These are simulated calculations - in a real scenario, you would
+      // use proper calibration curves for your specific sensors
+      
+      // Normal air has about 20.9% oxygen
+      // As gas levels increase, oxygen percentage decreases slightly
+      const oxygen = Math.max(19.5, 20.9 - (mq2Value / 4095) * 1.5);
+      
+      // Normal CO2 is around 400-600 ppm
+      // As gas levels increase, CO2 increases
+      const co2 = 400 + (mq2Value / 4095) * 2000;
+      
+      return {
+        oxygen: oxygen.toFixed(1),
+        co2: Math.round(co2)
+      };
+    }
+    
+    // Update status indicators based on values
+    function updateStatusIndicators(temp, hum, mq2, oxygen, co2) {
+      // Temperature status
+      if (temp < 18) {
+        tempStatusEl.textContent = "Cool";
+        tempStatusEl.className = "metric-status moderate";
+      } else if (temp >= 18 && temp <= 26) {
+        tempStatusEl.textContent = "Comfortable";
+        tempStatusEl.className = "metric-status good";
+      } else {
+        tempStatusEl.textContent = "Warm";
+        tempStatusEl.className = "metric-status poor";
+      }
+      
+      // Humidity status
+      if (hum < 30) {
+        humStatusEl.textContent = "Dry";
+        humStatusEl.className = "metric-status moderate";
+      } else if (hum >= 30 && hum <= 60) {
+        humStatusEl.textContent = "Comfortable";
+        humStatusEl.className = "metric-status good";
+      } else {
+        humStatusEl.textContent = "Humid";
+        humStatusEl.className = "metric-status poor";
+      }
+      
+      // MQ-2 status
+      if (mq2 < 1000) {
+        mq2StatusEl.textContent = "Clean";
+        mq2StatusEl.className = "metric-status good";
+      } else if (mq2 >= 1000 && mq2 <= 2000) {
+        mq2StatusEl.textContent = "Moderate";
+        mq2StatusEl.className = "metric-status moderate";
+      } else {
+        mq2StatusEl.textContent = "Polluted";
+        mq2StatusEl.className = "metric-status poor";
+      }
+      
+      // Oxygen status
+      if (oxygen >= 20.5) {
+        oxygenStatusEl.textContent = "Good";
+        oxygenStatusEl.className = "metric-status good";
+      } else if (oxygen >= 19.5 && oxygen < 20.5) {
+        oxygenStatusEl.textContent = "Moderate";
+        oxygenStatusEl.className = "metric-status moderate";
+      } else {
+        oxygenStatusEl.textContent = "Poor";
+        oxygenStatusEl.className = "metric-status poor";
+      }
+      
+      // CO2 status
+      if (co2 < 800) {
+        co2StatusEl.textContent = "Good";
+        co2StatusEl.className = "metric-status good";
+      } else if (co2 >= 800 && co2 < 1200) {
+        co2StatusEl.textContent = "Moderate";
+        co2StatusEl.className = "metric-status moderate";
+      } else {
+        co2StatusEl.textContent = "Poor";
+        co2StatusEl.className = "metric-status poor";
+      }
     }
 
     onValue(refPath, (snapshot) => {
       const val = snapshot.val();
       if (!val) {
         statusEl.textContent = "No data found at /AirQualityData";
+        statusEl.className = "status error";
         return;
       }
 
       const t = val.temperature ?? "—";
       const h = val.humidity ?? "—";
       const g = val.gas_level ?? "—";
+      
+      // Calculate oxygen and CO2 levels
+      const airQuality = calculateAirQuality(g);
+      const oxygen = airQuality.oxygen;
+      const co2 = airQuality.co2;
 
-      tempEl.textContent = t + " °C";
-      humEl.textContent = h + " %";
+      // Update display values
+      tempEl.textContent = t;
+      humEl.textContent = h;
       mq2El.textContent = g;
-      statusEl.textContent = "Connected — last update: " + time();
+      oxygenEl.textContent = oxygen;
+      co2El.textContent = co2;
+      
+      // Update status
+      statusEl.innerHTML = `<i class="fas fa-check-circle"></i> Connected`;
+      statusEl.className = "status connected";
+      
+      // Update last update time
+      lastUpdateEl.textContent = formatTime();
+      
+      // Update status indicators
+      if (t !== "—" && h !== "—" && g !== "—") {
+        updateStatusIndicators(parseFloat(t), parseFloat(h), parseFloat(g), parseFloat(oxygen), parseFloat(co2));
+      }
 
+      // Add to event log
       const line = document.createElement("div");
-      line.textContent = `[${time()}] Temp:${t} Hum:${h} MQ2:${g}`;
+      line.className = "log-entry";
+      line.textContent = `[${formatTime()}] Temp: ${t}°C | Hum: ${h}% | MQ-2: ${g} | O₂: ${oxygen}% | CO₂: ${co2}ppm`;
       eventsEl.prepend(line);
-      while (eventsEl.childElementCount > 40) eventsEl.removeChild(eventsEl.lastChild);
+      
+      // Limit log entries
+      while (eventsEl.childElementCount > 20) {
+        eventsEl.removeChild(eventsEl.lastChild);
+      }
     });
   </script>
 </body>
