@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ESP32 Air Quality Monitor — Live</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; 
+           margin: 0; padding: 24px; background:#f7f8fb; color:#111; }
+    .card { background:white; padding: 18px; border-radius:12px; box-shadow:0 6px 18px rgba(20,20,40,0.06); max-width:720px; margin:auto;}
+    h1 { margin: 0 0 12px 0; font-size:1.4rem; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:12px; }
+    .box { padding:12px; border-radius:10px; background:#fbfdff; text-align:center; }
+    .big { font-size:1.6rem; font-weight:600; }
+    #log { max-height:200px; overflow:auto; margin-top:12px; background:#11110a11; padding:10px; border-radius:8px; font-size:0.9rem; }
+    small.gray { color:#666; display:block; margin-top:8px; }
+    footer { text-align:center; margin-top:18px; color:#666; font-size:0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>ESP32 Air Quality Monitor (Live)</h1>
+    <div id="status">Connecting to Firebase…</div>
+
+    <div class="grid" style="margin-top:14px;">
+      <div class="box">
+        <div>Temperature</div>
+        <div id="temp" class="big">— °C</div>
+        <small class="gray" id="tempTime"></small>
+      </div>
+      <div class="box">
+        <div>Humidity</div>
+        <div id="hum" class="big">— %</div>
+        <small class="gray" id="humTime"></small>
+      </div>
+      <div class="box">
+        <div>MQ-2 (Raw ADC)</div>
+        <div id="mq2" class="big">—</div>
+        <small class="gray" id="mq2Time"></small>
+      </div>
+    </div>
+
+    <div id="log">
+      <strong>Realtime updates:</strong>
+      <div id="events"></div>
+    </div>
+
+    <footer>
+      Data from your Firebase Realtime DB path: <code>/AirQualityData</code>
+    </footer>
+  </div>
+
+  <!-- Firebase SDK (modules) -->
+  <script type="module">
+    // --- IMPORT FIREBASE (modules) ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      onValue,
+      push,
+      set,
+      serverTimestamp,
+      onChildAdded
+    } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+
+    // --- YOUR FIREBASE CONFIG (use the config you provided) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyD8p71XKRrFnQ6BOXVSMnh9UfvhqjSoJiE",
+      authDomain: "air-quality-61a68.firebaseapp.com",
+      databaseURL: "https://air-quality-61a68-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "air-quality-61a68",
+      storageBucket: "air-quality-61a68.firebasestorage.app",
+      messagingSenderId: "681238979785",
+      appId: "1:681238979785:web:b9a668b40b75610f519918"
+    };
+
+    // --- INIT ---
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // PATH to read (match the node your ESP32 writes to)
+    // If your ESP32 writes directly to /AirQualityData (single object), use that.
+    const DATA_PATH = '/AirQualityData';
+
+    const statusEl = document.getElementById('status');
+    const tempEl = document.getElementById('temp');
+    const humEl = document.getElementById('hum');
+    const mq2El = document.getElementById('mq2');
+    const eventsEl = document.getElementById('events');
+    const tempTimeEl = document.getElementById('tempTime');
+    const humTimeEl = document.getElementById('humTime');
+    const mq2TimeEl = document.getElementById('mq2Time');
+
+    // friendly timestamp helper
+    function fmtTime(ts) {
+      try {
+        const d = ts ? new Date(ts) : new Date();
+        return d.toLocaleString();
+      } catch {
+        return '';
+      }
+    }
+
+    // Listen for value changes at DATA_PATH (realtime)
+    const topRef = ref(db, DATA_PATH);
+    onValue(topRef, (snap) => {
+      const val = snap.val();
+      if (!val) {
+        statusEl.textContent = 'No data at ' + DATA_PATH;
+        tempEl.textContent = '— °C';
+        humEl.textContent = '— %';
+        mq2El.textContent = '—';
+        return;
+      }
+      statusEl.textContent = 'Connected — last update: ' + fmtTime(Date.now());
+      // If your ESP32 sends a JSON object like { temperature: x, humidity: y, gas_level: z }
+      const t = val.temperature ?? val.temp ?? val.T;
+      const h = val.humidity ?? val.hum ?? val.H;
+      const g = val.gas_level ?? val.gas ?? val.mq2 ?? val.gasLevel ?? val.gas_level_raw;
+
+      if (t !== undefined) {
+        tempEl.textContent = Number(t).toFixed(2) + ' °C';
+        tempTimeEl.textContent = fmtTime(Date.now());
+      } else {
+        tempEl.textContent = '— °C';
+        tempTimeEl.textContent = '';
+      }
+      if (h !== undefined) {
+        humEl.textContent = Number(h).toFixed(2) + ' %';
+        humTimeEl.textContent = fmtTime(Date.now());
+      } else {
+        humEl.textContent = '— %';
+        humTimeEl.textContent = '';
+      }
+      if (g !== undefined) {
+        mq2El.textContent = g;
+        mq2TimeEl.textContent = fmtTime(Date.now());
+      } else {
+        mq2El.textContent = '—';
+        mq2TimeEl.textContent = '';
+      }
+
+      // add event in log
+      const line = document.createElement('div');
+      line.textContent = `[${fmtTime(Date.now())}] Temp:${t ?? '—'} Hum:${h ?? '—'} MQ2:${g ?? '—'}`;
+      eventsEl.prepend(line);
+      // keep log trimmed
+      while (eventsEl.childElementCount > 40) eventsEl.removeChild(eventsEl.lastChild);
+    });
+
+    // OPTIONAL: if your ESP32 pushes historical entries under /AirQualityData/logs or pushes unique children,
+    // you can listen to children added. Example commented:
+    /*
+    const logsRef = ref(db, '/AirQualityData/logs');
+    onChildAdded(logsRef, (snap) => {
+      const item = snap.val();
+      const li = document.createElement('div');
+      li.textContent = JSON.stringify(item);
+      eventsEl.prepend(li);
+    });
+    */
+  </script>
+</body>
+</html>
